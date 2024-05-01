@@ -2,7 +2,7 @@
 
 
 ## Summary
-
+ 
 These scripts and results analyse flow timeseries for the UK for future UKCP18 climate scenarios. Outputs are taken from hydrological models: SHETRAN (Newcastle University) and HBV (University of East Anglia). Two lines of analysis are taken: flow analysis, looking at flow quantiles and peaks over/under thresholds; and drought analysis, following the methods of CEH as in Rudd et. al (2017 & 2019). Drought metrics produced here are roughly equivalent to those produced by CEH in the referenced papers, but are presented for catchments, rather than regionally.
 
 All statistics are calculated from hydrological models that are benchmarked against recorded historical flows and driven by bias controlled UKCP18 climate data for all 12 RCPs. All simulations run for 100 years from 1980-2080.
