@@ -47,7 +47,7 @@ Rudd, A.C. Bell, V.A., Kay, A.L. (2017) National-scale analysis of simulated hyd
 
 ### Data Preperation 
 1. All calculations are performed using monthly data, created by taking the 30 day means. 
-2. Monthly flow anomolies are then calculated my calculating the mean flow for each month (i.e. the mean flow in all Januarys) during the baseline period and then deducting these values from each month across the time series.
+2. Monthly flow anomolies are then calculated by calculating the mean flow for each month (i.e. the mean flow in all Januarys) during the baseline period and then deducting these values from each month across the time series.
 3. The flow anomolies are then normalised by dividing the anomoly by each month's standard deviation.
 4. *Drought Intensity* total and mean are calculated by summing and averaging the drought anomoly for each drought period (i.e. each month or consecutive group of months with negative anomolies).
 5. *Drought Severity* is calculated for each drought period by multiplying its mean intensity by its length. (This is the same as the total intensity). 
@@ -65,7 +65,7 @@ Calculated by taking the mean length of all droughts (i.e. negative anomolies) w
 
 ### Drought Deficit
 This is the similar to the drought intensity.
-- *Max deficit* is gretest total intensity over the period, i.e. the greatest drought anomoly.  
+- *Max deficit* is the greatest total intensity over the period, i.e. the greatest drought anomaly.  
 - *Mean deficit* takes the mean of the mean drought intensities. (Severe)
 - *Sever Mean deficit* is calculated as above, but only using those drought instances that were classed as 'severe'.
 - *Total drought deficit* was calculated by summing the mean intensity from the different dought instances. **I am not sure that this is a useful statistic. It should be removed or corrected, as I think it should use the total of totals, not the total of means.**
