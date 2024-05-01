@@ -40,17 +40,14 @@ flow in a Southerly or westerly direction is -ve.
 --- TODO: -------------------------------
         - DROUGHTS ARE WRONG AND NEED UPDATING FROM THE CATCHMENT CODE
 
-
       - Consider whether you should be calculating intensity and severity non-standardised and only using
           the standardised datasets to calculate Standardised Severity as an indicator for whether the
           drought is severe or not, rather than for its actual value.
-      - Very long droughts exist (i.e. 70 years). These are only recorded in the final period. Consider
-          what to do here.
+      - Very long droughts exist (i.e. 70 years). These are only recorded in the final period.
+        UPDATE THIS FROM THE CATCHMENT LEVEL CODE.
       - Make sure that the river names are being read in without dropping trailing zeros. E.g. 1001.010 != 1001.01
       - Errors common with subtract issue in the return periods. Check cause and fix.
       - Add in check to skip temp_data that has no range in values (i.e. all 0 or all 0.16, for example)
-      - The temp_flow data is not made positive after extracted from the h5. This is so that Sayers and Partners
-          can tell whether a river cell is flowing N/E or S/W. Change this if needed.
 """
 
 # --- IMPORT PACKAGES ----------------------
@@ -296,6 +293,7 @@ if calculate_flow_stats:
     output_names.extend(["Q99", "Q95", "Q50", "Q05", "Q01", "LTQ95", "LTQ99", "GTQ05", "GTQ01"])
 
 if calculate_return_periods:
+    output_ReturnPeriod_2yr = copy.deepcopy(output_template)
     output_ReturnPeriod_3yr = copy.deepcopy(output_template)
     output_ReturnPeriod_5yr = copy.deepcopy(output_template)
     output_ReturnPeriod_10yr = copy.deepcopy(output_template)
@@ -304,7 +302,7 @@ if calculate_return_periods:
     output_ReturnPeriod_100yr = copy.deepcopy(output_template)
 
     # Add outputs to a list for writing:
-    output_list.extend([output_ReturnPeriod_3yr, output_ReturnPeriod_5yr, output_ReturnPeriod_10yr,
+    output_list.extend([output_ReturnPeriod_2yr, output_ReturnPeriod_3yr, output_ReturnPeriod_5yr, output_ReturnPeriod_10yr,
                         output_ReturnPeriod_25yr, output_ReturnPeriod_50yr, output_ReturnPeriod_100yr])
     output_names.extend(["ReturnPeriod_3yr", "ReturnPeriod_5yr", "ReturnPeriod_10yr",
                          "ReturnPeriod_25yr", "ReturnPeriod_50yr", "ReturnPeriod_100yr"])
@@ -401,6 +399,9 @@ for catchment in catchment_list:
 
             # Get the flow direction:
             direction = np.argmax(abs(np.sum(flows[river_cell, :, 0:1000], axis=1)))
+            # Sayers et al. want the return periods to be negative if they flow those directions so make these negative.
+            # 0=north, 1=east, 2=south (negative), 3=west (negative)
+            sign = -1 if direction in [2,3] else 1
 
             # ---------------------------------------------------------
             # CALCULATE FLOW QUANTILES AND COUNTS OVER/UNDER THRESHOLD:
@@ -459,14 +460,16 @@ for catchment in catchment_list:
                         # Calculate return periods UKCP18 Data:
                         try:
                             return_period_years, return_period_flows = calculate_return_events(
-                                temp_data, return_periods=[3, 5, 10, 25, 50, 100])
-                            output_ReturnPeriod_3yr.loc[river_id, (rcm, period)] = round(return_period_flows[0], 2)
-                            output_ReturnPeriod_5yr.loc[river_id, (rcm, period)] = round(return_period_flows[1], 2)
-                            output_ReturnPeriod_10yr.loc[river_id, (rcm, period)] = round(return_period_flows[2], 2)
-                            output_ReturnPeriod_25yr.loc[river_id, (rcm, period)] = round(return_period_flows[3], 2)
-                            output_ReturnPeriod_50yr.loc[river_id, (rcm, period)] = round(return_period_flows[4], 2)
-                            output_ReturnPeriod_100yr.loc[river_id, (rcm, period)] = round(return_period_flows[5], 2)
+                                temp_data, return_periods=[2, 3, 5, 10, 25, 50, 100])
+                            output_ReturnPeriod_2yr.loc[river_id, (rcm, period)] = sign*round(return_period_flows[0], 2)
+                            output_ReturnPeriod_3yr.loc[river_id, (rcm, period)] = sign*round(return_period_flows[0], 2)
+                            output_ReturnPeriod_5yr.loc[river_id, (rcm, period)] = sign*round(return_period_flows[1], 2)
+                            output_ReturnPeriod_10yr.loc[river_id, (rcm, period)] = sign*round(return_period_flows[2], 2)
+                            output_ReturnPeriod_25yr.loc[river_id, (rcm, period)] = sign*round(return_period_flows[3], 2)
+                            output_ReturnPeriod_50yr.loc[river_id, (rcm, period)] = sign*round(return_period_flows[4], 2)
+                            output_ReturnPeriod_100yr.loc[river_id, (rcm, period)] = sign*round(return_period_flows[5], 2)
                         except:
+                            output_ReturnPeriod_2yr.loc[river_id, (rcm, period)] = np.nan
                             output_ReturnPeriod_3yr.loc[river_id, (rcm, period)] = np.nan
                             output_ReturnPeriod_5yr.loc[river_id, (rcm, period)] = np.nan
                             output_ReturnPeriod_10yr.loc[river_id, (rcm, period)] = np.nan
@@ -477,157 +480,159 @@ for catchment in catchment_list:
 
             # --------------------
             # CEH Drought metrics:
+            # Commented out as this needs updating to fix the issue of overly long droughts extending
+            # outside of their period. Update this using the catchment level code.
             # --------------------
 
-            if calculate_drought_stats:
-
-                # >>> STEP 1 & 3 <<<
-                # (Create long term standardised mean monthly flows)
-
-                # --- Aggregate to monthly:
-                monthly_flow = aggregate_to_monthly(flow_df[:36000])  # The Climate data length
-
-                baseline_start = int(date_indexes[drought_baseline_date][0] / 30)
-                baseline_stop = int(date_indexes[drought_baseline_date][1] / 30)
-
-                # Calculate the mean monthly flow (i.e. Jan-Dec) for the baseline period:
-                mean_monthly_flow_baseline, mean_monthly_flow_baseline_std = mean_baseline_flow(
-                    monthly_flow[baseline_start:baseline_stop])
-
-                # Calculate flow anomaly by removing mean monthly baseline flow from the full record:
-                monthly_flow_anomaly = calculate_flow_anomaly(monthly_flow, mean_monthly_flow_baseline)
-
-                # Normalise the anomaly by dividing by the mean month's standard deviation:
-                monthly_flow_anomaly_normalised = normalise_anomaly(monthly_flow_anomaly,
-                                                                    mean_monthly_flow_baseline_std)
-
-                # Create list of flow deficits (i.e. negative normalised anomalies):
-                monthly_flow_deficit_stnd = [1 if m < 0 else 0 for m in monthly_flow_anomaly_normalised]
-
-                # >>> STEP 2 <<<
-                # (Calculate duration, intensity and severity of deficit of standardised timeseries)
-
-                # --- Create data table to hold all the drought data ---
-
-                # Start with columns for lengths for droughts and non-droughts:
-                drought_count = [(i, len(list(g))) for i, g in groupby(monthly_flow_deficit_stnd)]
-                master_drought_table = pd.DataFrame(drought_count, columns=['drought', 'length'])
-
-                # Add a column with indexes of months when each drought/non-drought ends:
-                master_drought_table["month"] = master_drought_table["length"].cumsum()
-
-                # Add columns with indexes for using with Python sub-setting:
-                master_drought_table["start_index"] = master_drought_table["month"] - master_drought_table["length"]
-                master_drought_table["end_index"] = master_drought_table["start_index"] + master_drought_table["length"]
-
-                # Subset the dataset to only drought periods:
-                master_drought_table = master_drought_table[master_drought_table["drought"] == 1]
-                master_drought_table = master_drought_table.reset_index()
-
-                # Add columns for intensity and severity:
-                master_drought_table[
-                    ["intensity_total", "intensity_mean", "severity", "standardised_severity"]] = np.nan
-
-                # Run through each period for the catchment and calculate statistics:
-                for period in drought_periods:
-
-                    # Get indexes from the date_index dictionary:
-                    date_index = date_indexes[period]
-
-                    # If it is a warming period, calculate the correct start/end months for the period.
-                    # Capped at 2080, converting from days to months:
-                    if "WL" in period:
-                        date_index = [360 / 30 * (date_index[r] - 1980),
-                                      min(360 / 30 * (date_index[r] - 1980 + 30), 12 * 100)]
-                    else:
-                        # Translate the period string into a start and end month for the period:
-                        date_index = [date_index[0] / 30, date_index[1] / 30]
-
-                    # IMPORTANT: some of the droughts will cross over between periods. This creates terrible results.
-                    # We need to crop all droughts at their periods, so we will take a subset of the
-                    # data (only containing data for the period), edit the start and end droughts, if needed,
-                    # and then do analysis on that.
-
-                    # Subset 1. Use filter rows inclusive of those that overlap the thresholds (d_start<p_end + d_end>p_start):
-                    period_drought_table = master_drought_table[
-                        (master_drought_table['start_index'] <= date_index[1]) &
-                        (master_drought_table['end_index'] >= date_index[0])
-                        ].copy()
-
-                    # Subset 2. Edit the start of the first drought and the end of the last:
-                    period_drought_table.at[period_drought_table.index[0], 'start_index'] = max(
-                        [period_drought_table['start_index'].iloc[0], date_index[0]])
-                    period_drought_table.at[period_drought_table.index[-1], 'end_index'] = min(
-                        [period_drought_table['end_index'].iloc[-1], date_index[1]])
-
-                    # Subset 3. Calculate new drought durations for the edited rows.
-                    period_drought_table.at[period_drought_table.index[0], 'length'] = \
-                    period_drought_table['end_index'].iloc[0] - period_drought_table['start_index'].iloc[0]
-                    period_drought_table.at[period_drought_table.index[-1], 'length'] = \
-                    period_drought_table['end_index'].iloc[-1] - period_drought_table['start_index'].iloc[-1]
-
-                    # If step 3 means that there is an initial drought with 0 length, remove this:
-                    period_drought_table = period_drought_table[period_drought_table['length'] != 0]
-
-                    # --- Calculate the intensities & severities ---
-
-                    # Run through each drought instance:
-                    for row in period_drought_table.index:
-
-                        # Create index for monthly flow time series based on the drought period:
-                        # subset the monthly flow time series based on the drought period:
-                        drought_instance = monthly_flow_anomaly_normalised[
-                                           int(period_drought_table.loc[row, "start_index"]):
-                                           int(period_drought_table.loc[row, "end_index"])]
-
-                        # Calculate intensity (total deficit) and add this to the table:
-                        period_drought_table.loc[row, "intensity_total"] = -drought_instance.sum()
-
-                        # Calculate mean intensity (average deficit) and add this to the table:
-                        period_drought_table.loc[row, "intensity_mean"] = -drought_instance.mean()
-
-                        # Calculate Severity (mean intensity x duration):
-                        # Note - I think that this is the same as intensity total, but that that is correct.
-                        period_drought_table.loc[row, "severity"] = period_drought_table.loc[row, "intensity_mean"] * \
-                                                                    period_drought_table.loc[
-                                                                        row, "length"]
-
-                        # Calculate Standardised Severity:
-                        if period_drought_table.loc[row, "severity"] < 4:
-                            period_drought_table.loc[row, "standardised_severity"] = 0
-                        if period_drought_table.loc[row, "severity"] >= 4:
-                            period_drought_table.loc[row, "standardised_severity"] = 1
-                        if period_drought_table.loc[row, "severity"] >= 8:
-                            period_drought_table.loc[row, "standardised_severity"] = 2
-
-                    # >>> STEP 4 & 5 <<<
-                    # (Statistics; for droughts and severe droughts [Severity > 4 m3/s])
-
-                    # --- Calculate Drought Statistics for Periods: ---
-
-                    # # Run through each period for the catchment and calculate statistics:
-                    period_drought_table_severe = period_drought_table[period_drought_table.standardised_severity > 0]
-
-                    # Add the duration to the output dataset:
-                    output_drought_duration_mean.loc[catchment, (rcm, period)] = round(
-                        period_drought_table["length"].mean(skipna=True), 3)
-                    output_drought_duration_mean_severe.loc[catchment, (rcm, period)] = round(
-                        period_drought_table_severe["length"].mean(skipna=True), 3)
-
-                    output_drought_months.loc[catchment, (rcm, period)] = round(
-                        period_drought_table["length"].sum(skipna=True), 3)
-                    output_drought_months_severe.loc[catchment, (rcm, period)] = round(
-                        period_drought_table_severe["length"].sum(skipna=True), 3)
-
-                    # Add intensity statistics to output dataset:
-                    output_deficit_max.loc[catchment, (rcm, period)] = round(
-                        period_drought_table["intensity_total"].max(skipna=True), 3)
-                    output_deficit_mean.loc[catchment, (rcm, period)] = round(
-                        period_drought_table["intensity_mean"].mean(skipna=True), 3)
-                    output_deficit_total.loc[catchment, (rcm, period)] = round(
-                        period_drought_table["intensity_total"].sum(skipna=True), 3)
-                    output_deficit_mean_severe.loc[catchment, (rcm, period)] = round(
-                        period_drought_table_severe["intensity_mean"].mean(skipna=True), 3)
+            # if calculate_drought_stats:
+            #
+            #     # >>> STEP 1 & 3 <<<
+            #     # (Create long term standardised mean monthly flows)
+            #
+            #     # --- Aggregate to monthly:
+            #     monthly_flow = aggregate_to_monthly(flow_df[:36000])  # The Climate data length
+            #
+            #     baseline_start = int(date_indexes[drought_baseline_date][0] / 30)
+            #     baseline_stop = int(date_indexes[drought_baseline_date][1] / 30)
+            #
+            #     # Calculate the mean monthly flow (i.e. Jan-Dec) for the baseline period:
+            #     mean_monthly_flow_baseline, mean_monthly_flow_baseline_std = mean_baseline_flow(
+            #         monthly_flow[baseline_start:baseline_stop])
+            #
+            #     # Calculate flow anomaly by removing mean monthly baseline flow from the full record:
+            #     monthly_flow_anomaly = calculate_flow_anomaly(monthly_flow, mean_monthly_flow_baseline)
+            #
+            #     # Normalise the anomaly by dividing by the mean month's standard deviation:
+            #     monthly_flow_anomaly_normalised = normalise_anomaly(monthly_flow_anomaly,
+            #                                                         mean_monthly_flow_baseline_std)
+            #
+            #     # Create list of flow deficits (i.e. negative normalised anomalies):
+            #     monthly_flow_deficit_stnd = [1 if m < 0 else 0 for m in monthly_flow_anomaly_normalised]
+            #
+            #     # >>> STEP 2 <<<
+            #     # (Calculate duration, intensity and severity of deficit of standardised timeseries)
+            #
+            #     # --- Create data table to hold all the drought data ---
+            #
+            #     # Start with columns for lengths for droughts and non-droughts:
+            #     drought_count = [(i, len(list(g))) for i, g in groupby(monthly_flow_deficit_stnd)]
+            #     master_drought_table = pd.DataFrame(drought_count, columns=['drought', 'length'])
+            #
+            #     # Add a column with indexes of months when each drought/non-drought ends:
+            #     master_drought_table["month"] = master_drought_table["length"].cumsum()
+            #
+            #     # Add columns with indexes for using with Python sub-setting:
+            #     master_drought_table["start_index"] = master_drought_table["month"] - master_drought_table["length"]
+            #     master_drought_table["end_index"] = master_drought_table["start_index"] + master_drought_table["length"]
+            #
+            #     # Subset the dataset to only drought periods:
+            #     master_drought_table = master_drought_table[master_drought_table["drought"] == 1]
+            #     master_drought_table = master_drought_table.reset_index()
+            #
+            #     # Add columns for intensity and severity:
+            #     master_drought_table[
+            #         ["intensity_total", "intensity_mean", "severity", "standardised_severity"]] = np.nan
+            #
+            #     # Run through each period for the catchment and calculate statistics:
+            #     for period in drought_periods:
+            #
+            #         # Get indexes from the date_index dictionary:
+            #         date_index = date_indexes[period]
+            #
+            #         # If it is a warming period, calculate the correct start/end months for the period.
+            #         # Capped at 2080, converting from days to months:
+            #         if "WL" in period:
+            #             date_index = [360 / 30 * (date_index[r] - 1980),
+            #                           min(360 / 30 * (date_index[r] - 1980 + 30), 12 * 100)]
+            #         else:
+            #             # Translate the period string into a start and end month for the period:
+            #             date_index = [date_index[0] / 30, date_index[1] / 30]
+            #
+            #         # IMPORTANT: some of the droughts will cross over between periods. This creates terrible results.
+            #         # We need to crop all droughts at their periods, so we will take a subset of the
+            #         # data (only containing data for the period), edit the start and end droughts, if needed,
+            #         # and then do analysis on that.
+            #
+            #         # Subset 1. Use filter rows inclusive of those that overlap the thresholds (d_start<p_end + d_end>p_start):
+            #         period_drought_table = master_drought_table[
+            #             (master_drought_table['start_index'] <= date_index[1]) &
+            #             (master_drought_table['end_index'] >= date_index[0])
+            #             ].copy()
+            #
+            #         # Subset 2. Edit the start of the first drought and the end of the last:
+            #         period_drought_table.at[period_drought_table.index[0], 'start_index'] = max(
+            #             [period_drought_table['start_index'].iloc[0], date_index[0]])
+            #         period_drought_table.at[period_drought_table.index[-1], 'end_index'] = min(
+            #             [period_drought_table['end_index'].iloc[-1], date_index[1]])
+            #
+            #         # Subset 3. Calculate new drought durations for the edited rows.
+            #         period_drought_table.at[period_drought_table.index[0], 'length'] = \
+            #         period_drought_table['end_index'].iloc[0] - period_drought_table['start_index'].iloc[0]
+            #         period_drought_table.at[period_drought_table.index[-1], 'length'] = \
+            #         period_drought_table['end_index'].iloc[-1] - period_drought_table['start_index'].iloc[-1]
+            #
+            #         # If step 3 means that there is an initial drought with 0 length, remove this:
+            #         period_drought_table = period_drought_table[period_drought_table['length'] != 0]
+            #
+            #         # --- Calculate the intensities & severities ---
+            #
+            #         # Run through each drought instance:
+            #         for row in period_drought_table.index:
+            #
+            #             # Create index for monthly flow time series based on the drought period:
+            #             # subset the monthly flow time series based on the drought period:
+            #             drought_instance = monthly_flow_anomaly_normalised[
+            #                                int(period_drought_table.loc[row, "start_index"]):
+            #                                int(period_drought_table.loc[row, "end_index"])]
+            #
+            #             # Calculate intensity (total deficit) and add this to the table:
+            #             period_drought_table.loc[row, "intensity_total"] = -drought_instance.sum()
+            #
+            #             # Calculate mean intensity (average deficit) and add this to the table:
+            #             period_drought_table.loc[row, "intensity_mean"] = -drought_instance.mean()
+            #
+            #             # Calculate Severity (mean intensity x duration):
+            #             # Note - I think that this is the same as intensity total, but that that is correct.
+            #             period_drought_table.loc[row, "severity"] = period_drought_table.loc[row, "intensity_mean"] * \
+            #                                                         period_drought_table.loc[
+            #                                                             row, "length"]
+            #
+            #             # Calculate Standardised Severity:
+            #             if period_drought_table.loc[row, "severity"] < 4:
+            #                 period_drought_table.loc[row, "standardised_severity"] = 0
+            #             if period_drought_table.loc[row, "severity"] >= 4:
+            #                 period_drought_table.loc[row, "standardised_severity"] = 1
+            #             if period_drought_table.loc[row, "severity"] >= 8:
+            #                 period_drought_table.loc[row, "standardised_severity"] = 2
+            #
+            #         # >>> STEP 4 & 5 <<<
+            #         # (Statistics; for droughts and severe droughts [Severity > 4 m3/s])
+            #
+            #         # --- Calculate Drought Statistics for Periods: ---
+            #
+            #         # # Run through each period for the catchment and calculate statistics:
+            #         period_drought_table_severe = period_drought_table[period_drought_table.standardised_severity > 0]
+            #
+            #         # Add the duration to the output dataset:
+            #         output_drought_duration_mean.loc[catchment, (rcm, period)] = round(
+            #             period_drought_table["length"].mean(skipna=True), 3)
+            #         output_drought_duration_mean_severe.loc[catchment, (rcm, period)] = round(
+            #             period_drought_table_severe["length"].mean(skipna=True), 3)
+            #
+            #         output_drought_months.loc[catchment, (rcm, period)] = round(
+            #             period_drought_table["length"].sum(skipna=True), 3)
+            #         output_drought_months_severe.loc[catchment, (rcm, period)] = round(
+            #             period_drought_table_severe["length"].sum(skipna=True), 3)
+            #
+            #         # Add intensity statistics to output dataset:
+            #         output_deficit_max.loc[catchment, (rcm, period)] = round(
+            #             period_drought_table["intensity_total"].max(skipna=True), 3)
+            #         output_deficit_mean.loc[catchment, (rcm, period)] = round(
+            #             period_drought_table["intensity_mean"].mean(skipna=True), 3)
+            #         output_deficit_total.loc[catchment, (rcm, period)] = round(
+            #             period_drought_table["intensity_total"].sum(skipna=True), 3)
+            #         output_deficit_mean_severe.loc[catchment, (rcm, period)] = round(
+            #             period_drought_table_severe["intensity_mean"].mean(skipna=True), 3)
 
     # ---------------------------------------------
     # Write partially Completed documents as backup
