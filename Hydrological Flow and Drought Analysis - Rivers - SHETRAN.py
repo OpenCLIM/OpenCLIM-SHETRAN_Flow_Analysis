@@ -20,7 +20,7 @@ Run this on Blade 4 using:
 conda activate \ProgramData\Water_Blade_Programs\BenSmith\env_lmoments
 I:
 cd "SHETRAN_GB_2021\08_Analysis\03 - Flow Analysis"
-python "Hydrological Flow and Drought Analysis - Catchments.py" REM 'add any comment you want here'
+python "Hydrological Flow and Drought Analysis - Rivers - SHETRAN.py" REM 'add any comment you want here'
 
 Ben also has an environment called lmoments on his laptop that works.
 
@@ -39,15 +39,14 @@ flow in a Southerly or westerly direction is -ve.
 
 --- TODO: -------------------------------
         - DROUGHTS ARE WRONG AND NEED UPDATING FROM THE CATCHMENT CODE
-
-      - Consider whether you should be calculating intensity and severity non-standardised and only using
-          the standardised datasets to calculate Standardised Severity as an indicator for whether the
-          drought is severe or not, rather than for its actual value.
-      - Very long droughts exist (i.e. 70 years). These are only recorded in the final period.
-        UPDATE THIS FROM THE CATCHMENT LEVEL CODE.
-      - Make sure that the river names are being read in without dropping trailing zeros. E.g. 1001.010 != 1001.01
-      - Errors common with subtract issue in the return periods. Check cause and fix.
-      - Add in check to skip temp_data that has no range in values (i.e. all 0 or all 0.16, for example)
+        - Consider whether you should be calculating intensity and severity non-standardised and only using
+            the standardised datasets to calculate Standardised Severity as an indicator for whether the
+            drought is severe or not, rather than for its actual value.
+        - Very long droughts exist (i.e. 70 years). These are only recorded in the final period.
+            UPDATE THIS FROM THE CATCHMENT LEVEL CODE.
+        - Make sure that the river names are being read in without dropping trailing zeros. E.g. 1001.010 != 1001.01
+        - Errors common with subtract issue in the return periods. Check cause and fix.
+        - Add in check to skip temp_data that has no range in values (i.e. all 0 or all 0.16, for example)
 """
 
 # --- IMPORT PACKAGES ----------------------
@@ -58,9 +57,10 @@ from Hydrological_Flow_and_Drought_Analysis_Functions import *
 
 print("Beginning analysis - if you have an output worksheet open, close it now!")
 
-calculate_flow_stats = True
+calculate_flow_stats = False
 calculate_return_periods = True
-calculate_drought_stats = False # !! DO NOT USE THIS UNTIL YOU HAVE UPDATED FROM THE CATCHMENT LEVEL CODE !!
+calculate_drought_stats = False  # !! DO NOT USE THIS UNTIL YOU HAVE UPDATED FROM THE CATCHMENT LEVEL CODE !!
+reduce_export = False  # This will crop empty rows from the Excel Export - the reading and writing of these takes a long time when testing the code - you probably only want this when running tests.
 
 if not calculate_flow_stats and not calculate_drought_stats and not calculate_return_periods:
     print("Check you are making outputs! 'Flow', 'Return Period' and 'Drought' stats are set to False.")
@@ -170,7 +170,7 @@ print(master_folder_UKCP18)
 # sleep(2)
 
 # --- TEST ---
-# catchment_list = catchment_list[0:3]
+# catchment_list = catchment_list[2:4]
 # catchment_list = ["29009"]
 # --- END ---
 
@@ -293,7 +293,7 @@ if calculate_flow_stats:
     output_names.extend(["Q99", "Q95", "Q50", "Q05", "Q01", "LTQ95", "LTQ99", "GTQ05", "GTQ01"])
 
 if calculate_return_periods:
-    output_ReturnPeriod_2yr = copy.deepcopy(output_template)
+    # output_ReturnPeriod_2yr = copy.deepcopy(output_template)
     output_ReturnPeriod_3yr = copy.deepcopy(output_template)
     output_ReturnPeriod_5yr = copy.deepcopy(output_template)
     output_ReturnPeriod_10yr = copy.deepcopy(output_template)
@@ -302,9 +302,11 @@ if calculate_return_periods:
     output_ReturnPeriod_100yr = copy.deepcopy(output_template)
 
     # Add outputs to a list for writing:
-    output_list.extend([output_ReturnPeriod_2yr, output_ReturnPeriod_3yr, output_ReturnPeriod_5yr, output_ReturnPeriod_10yr,
+    output_list.extend([# output_ReturnPeriod_2yr,
+                        output_ReturnPeriod_3yr, output_ReturnPeriod_5yr, output_ReturnPeriod_10yr,
                         output_ReturnPeriod_25yr, output_ReturnPeriod_50yr, output_ReturnPeriod_100yr])
-    output_names.extend(["ReturnPeriod_3yr", "ReturnPeriod_5yr", "ReturnPeriod_10yr",
+    output_names.extend([# "ReturnPeriod_2yr",
+                         "ReturnPeriod_3yr", "ReturnPeriod_5yr", "ReturnPeriod_10yr",
                          "ReturnPeriod_25yr", "ReturnPeriod_50yr", "ReturnPeriod_100yr"])
 
 if calculate_drought_stats:
@@ -401,7 +403,7 @@ for catchment in catchment_list:
             direction = np.argmax(abs(np.sum(flows[river_cell, :, 0:1000], axis=1)))
             # Sayers et al. want the return periods to be negative if they flow those directions so make these negative.
             # 0=north, 1=east, 2=south (negative), 3=west (negative)
-            sign = -1 if direction in [2,3] else 1
+            sign = -1 if direction in [2, 3] else 1
 
             # ---------------------------------------------------------
             # CALCULATE FLOW QUANTILES AND COUNTS OVER/UNDER THRESHOLD:
@@ -460,16 +462,16 @@ for catchment in catchment_list:
                         # Calculate return periods UKCP18 Data:
                         try:
                             return_period_years, return_period_flows = calculate_return_events(
-                                temp_data, return_periods=[2, 3, 5, 10, 25, 50, 100])
-                            output_ReturnPeriod_2yr.loc[river_id, (rcm, period)] = sign*round(return_period_flows[0], 2)
-                            output_ReturnPeriod_3yr.loc[river_id, (rcm, period)] = sign*round(return_period_flows[0], 2)
-                            output_ReturnPeriod_5yr.loc[river_id, (rcm, period)] = sign*round(return_period_flows[1], 2)
-                            output_ReturnPeriod_10yr.loc[river_id, (rcm, period)] = sign*round(return_period_flows[2], 2)
-                            output_ReturnPeriod_25yr.loc[river_id, (rcm, period)] = sign*round(return_period_flows[3], 2)
-                            output_ReturnPeriod_50yr.loc[river_id, (rcm, period)] = sign*round(return_period_flows[4], 2)
+                                temp_data, return_periods=[3, 5, 10, 25, 50, 100])  # 2
+                            # output_ReturnPeriod_2yr.loc[river_id, (rcm, period)] =   sign*round(return_period_flows[0], 2)
+                            output_ReturnPeriod_3yr.loc[river_id, (rcm, period)] =   sign*round(return_period_flows[0], 2)
+                            output_ReturnPeriod_5yr.loc[river_id, (rcm, period)] =   sign*round(return_period_flows[1], 2)
+                            output_ReturnPeriod_10yr.loc[river_id, (rcm, period)] =  sign*round(return_period_flows[2], 2)
+                            output_ReturnPeriod_25yr.loc[river_id, (rcm, period)] =  sign*round(return_period_flows[3], 2)
+                            output_ReturnPeriod_50yr.loc[river_id, (rcm, period)] =  sign*round(return_period_flows[4], 2)
                             output_ReturnPeriod_100yr.loc[river_id, (rcm, period)] = sign*round(return_period_flows[5], 2)
                         except:
-                            output_ReturnPeriod_2yr.loc[river_id, (rcm, period)] = np.nan
+                            # output_ReturnPeriod_2yr.loc[river_id, (rcm, period)] = np.nan
                             output_ReturnPeriod_3yr.loc[river_id, (rcm, period)] = np.nan
                             output_ReturnPeriod_5yr.loc[river_id, (rcm, period)] = np.nan
                             output_ReturnPeriod_10yr.loc[river_id, (rcm, period)] = np.nan
@@ -648,7 +650,7 @@ for catchment in catchment_list:
     #         with pd.ExcelWriter(output_path) as writer:
     #             output_list[i].to_excel(writer, sheet_name='SHETRAN-UK Autocalibrated')
 
-print("TIME: ", time.time() - test_time)
+print("TIME: ", round(time.time() - test_time, 1))
 
 # -----------------------------
 # WRITE FLOW/DROUGHT STATISTICS
@@ -663,6 +665,10 @@ print("Writing Excel documents.")
 
 for i in range(len(output_list)):
     output_path = f"{analysis_path}Outputs/02_River_Network/{output_root_name}_RiverNet_{output_names[i]}.xlsx"
+
+    # Crop down the Excel documents as these are very large:
+    if reduce_export:
+        output_list[i].dropna(inplace=True)
 
     # Check whether to append or write new file:
     if os.path.exists(output_path):
